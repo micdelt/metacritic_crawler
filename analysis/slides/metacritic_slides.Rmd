@@ -1,0 +1,171 @@
+---
+title       : Описательный анализ данных Metacritic
+subtitle    : 
+author      : Великий Дмитрий Павлович
+job         : Университет ИТМО
+framework   : io2012        # {io2012, html5slides, shower, dzslides, ...}
+#highlighter : highlight.js  # {highlight.js, prettify, highlight}
+#hitheme     : tomorrow      # 
+widgets     : []            # {mathjax, quiz, bootstrap}
+mode        : selfcontained # {standalone, draft, selfcontained}
+---
+
+```{r setoptions, echo=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE)
+opts_chunk$set(results='asis')
+opts_chunk$set(warning = FALSE)
+opts_chunk$set(message = FALSE)
+#opts_chunk$set(fig.height = 5)
+opts_chunk$set(cache=FALSE) 
+#options(device = "cairo_pdf") #otherwise tons of warnings
+opts_chunk$set(dev='svg')
+```
+
+```{r loaddata}
+library(modeest)
+library(reshape2)
+library(ggplot2)
+library(lubridate)
+games <- read.csv('../../data/metacritic-20141019-152743.csv', na.strings="NA",
+                  colClasses=c(release_date="Date"))
+```
+<style>
+.title-slide {
+  background-color: #FFFFFF; /* #EDE0CF; ; #CA9F9D*/
+}
+</style>
+
+<!-- Limit image width and height -->
+<style type='text/css'>
+img {
+    max-height: 560px;
+    max-width: 964px;
+}
+</style>
+
+<!-- Center image on slide -->
+<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.7.min.js"></script>
+<script type='text/javascript'>
+$(function() {
+    $("p:has(img)").addClass('centered');
+});
+</script>
+
+## О Metacritic 
+
+
+![](http://www.metacritic.com/images/modules/about_metascores.png)
+
+---
+## Система агрегирования оценок
+- Оценка пользователей (user score) = среднее арифметическое
+- Оценка критиков (metascore) = взвешенное среднее
+
+--- #custbg 
+<style>
+#custbg {
+  background-image:url(http://i.imgur.com/pt9kPjz.png); 
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  text-shadow: 2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff, 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+}
+</style>
+## Сбор данных
+
+---
+## Гипотезы
+1. ОП и ОК значительно расходятся в большинстве случаев
+2. В среднем, чем раньше выпущена игра, тем выше её оценка
+
+---
+## Распределение оценок
+```{r scoresdens}
+d1 <- density(games$metascore) 
+d2 <- density(games$user_score, na.rm=T)
+plot(range(d1$x, d2$x), range(d1$y, d2$y), type = "n", xlab = "Оценка", 
+     ylab="Плотность", cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5)
+lines(d1, col = "red")
+lines(d2, col = "blue")
+legend(x= 5, y=0.025, legend = c("Оценка критиков", "Оценка пользователей"), 
+       col=c("red", "blue"), lwd=2, lty=1)
+```
+
+---
+## Число игр по годам
+```{r sumgamecountbydate}
+hist(games$release_date, breaks = 'years', freq=T, xlab = "Год издания", 
+     ylab = "Число игр", main="")
+```
+
+---
+## Число оценок по годам
+```{r sumscorecountbydate, fig.width=10}
+sum_score_count_by_date <- aggregate(cbind(critics_reviews_count, user_reviews_count) ~ format(release_date, "%Y"), data = games, sum) 
+names(sum_score_count_by_date)[1] <- "year"
+mdf <- melt(sum_score_count_by_date, value.name = "sum_score_count")
+ggplot(data=mdf, aes(x=year, y=sum_score_count, group = variable, fill = variable)) + 
+geom_bar(stat = 'identity', position = 'dodge') + theme_bw() + 
+theme(axis.text.x = element_text(angle = 45, hjust = 1, size=15)) + 
+xlab("Год издания") + ylab("Число рецензий")  
+```
+
+---
+## Медианы оценок по годам
+```{r medianscoresbydate, fig.width=10}
+median_scores_by_date <- aggregate(cbind(metascore, user_score) ~ 
+                                 format(release_date, "%Y"), data = games, median) 
+names(median_scores_by_date)[1] <- "year"
+mdf <- melt(median_scores_by_date, value.name = "median_score")
+coef <- with(games, lm(user_score ~ year(release_date)))$coefficients
+ggplot(data=mdf, aes(x=year, y=median_score, group = variable, color = variable)) + 
+geom_line() +# stat_smooth(method="lm", se=FALSE)+
+coord_cartesian(ylim = c(65, 100)) + theme_bw() + 
+theme(axis.text.x = element_text(angle = 45, hjust = 1, size=15)) + 
+xlab("Год") + ylab("Медиана оценки") + 
+ggtitle("Медиана оценок критиков \n и медиана оценок пользователей по годам")
+```
+
+---
+## Медиана ОК - Медиана ОП
+```{r scorediffbytoppubs, fig.width=10}
+toppubs <- aggregate(user_reviews_count ~ publisher, data=games, 
+                                          quantile, probs=0.75)
+top30pubs <- head(toppubs[order(toppubs$user_reviews_count, decreasing=TRUE),], 
+                                    n=30)
+median_scores_by_publisher <- aggregate(cbind(metascore, user_score) ~ 
+                                                                         publisher, data = games, median) 
+names(median_scores_by_publisher)[1] <- "publisher"
+median_diff_top_pubs <- median_scores_by_publisher[median_scores_by_publisher$publisher %in% top30pubs$publisher,]
+t <- transform(median_diff_top_pubs, scorediff = metascore-user_score, metascore=NULL, user_score=NULL)
+t <- transform(t, publisher=reorder(publisher, -scorediff))#t[order(t$scorediff, decreasing=T),]
+ggplot(data=t, aes(x=publisher,y=scorediff)) + geom_bar(stat="identity") + 
+theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 15)) +
+xlab("Издатель") + ylab("Медиана ОК - Медиана ОП") + ggtitle("Медиана оценок критиков - медиана оценок пользователей")
+```
+
+---
+## Распределение разности между ОК и ОП
+```{r scorediffdistrib}
+score_difference <- transform(games, scorediff = metascore-user_score, 
+metascore=NULL, user_score=NULL)
+
+par(mar=c(5,4,0,2)+0.1)
+plot(density(na.omit(score_difference$scorediff)), xlab = "ОК-ОП", ylab="Плотность",
+     main="", cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, lwd=2)
+```
+
+---
+## Выводы
+* Наблюдается статистически значимая разница между ОП и ОК
+* Год выпуска игры и её оценка отрицательно коррелируют
+* Зашумленность, отсутствие формального контроля данных
+
+--- {
+ tpl: thankyou,
+  social: [{title: Файл, href: "is.gd/metacritic_xls"}, {title: Код, href: "is.gd/metacritic_code"}, {title: email, href: "dmitry.velikij@gmail.com"}]
+  }
+
+## Спасибо за внимание
+
