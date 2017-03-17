@@ -17,7 +17,9 @@ search for potential sources of bias.
 Done using R language. 
 
 # Examples of usage:
-* to scrape data yourself - run `scrapy crawl metacritic` from within /scraping/metacriticbot. 
+scrapy crawl metacritic [-a platform=<platform>]
+platform - pc, xboxone, switch, ps4 (default pc)
+
 See Scrapy documentation [here](http://scrapy.org/). 
 Some of the scraped fields: ![scraped](http://i.imgur.com/A5CBHZ6.png)
 * to get already scraped dataset - http://is.gd/metacritic_xls
